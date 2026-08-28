@@ -1,0 +1,43 @@
+# --- ETAPA 1: Construcción (Build) ---
+FROM node:20-alpine AS builder
+
+# Establece el directorio de trabajo
+WORKDIR /app
+
+# Copia los archivos de gestión de dependencias
+COPY package*.json ./
+
+# Instala todas las dependencias (incluyendo devDependencies)
+RUN npm ci
+
+# Copia el resto del código fuente
+COPY . .
+
+# (Opcional) Si usas TypeScript, React, Vue o NestJS, descompila este comando:
+# RUN npm run build
+
+# --- ETAPA 2: Producción ---
+FROM node:20-alpine AS runner
+
+WORKDIR /app
+
+# Configura el entorno a producción
+ENV NODE_ENV=production
+
+# Copia solo los archivos de dependencias necesarias
+COPY package*.json ./
+
+# Instala únicamente dependencias de producción para minimizar tamaño
+RUN npm ci --only=production && npm cache clean --force
+
+# Copia el código fuente (o la carpeta dist/build si compilaste)
+COPY --from=builder /app .
+
+# Expón el puerto donde corre tu aplicación (cambia el 3000 si usas otro)
+EXPOSE 1212
+
+# Usuario no raíz por seguridad
+USER node
+
+# Comando para arrancar la aplicación
+CMD ["node", "index.js"]

@@ -1,43 +1,33 @@
-# --- ETAPA 1: Construcción (Build) ---
-FROM node:20-alpine AS builder
+# ── Imagen para Control de Activos OCC ──────────────────────────────────────
+FROM node:20-alpine
 
-# Establece el directorio de trabajo
+# Directorio de trabajo dentro del contenedor
 WORKDIR /app
 
-# Copia los archivos de gestión de dependencias
-COPY package*.json ./
+# Instalar dependencias primero (aprovecha la cache de Docker si el código
+# cambia pero no las dependencias).
+# Usamos "npm install" en vez de "npm ci" porque no depende de que
+# package-lock.json esté perfectamente sincronizado con package.json;
+# si hay diferencias, npm install las resuelve solo en vez de fallar.
+COPY package.json package-lock.json* ./
+RUN npm install --omit=dev
 
-# Instala todas las dependencias (incluyendo devDependencies)
-RUN npm ci
-
-# Copia el resto del código fuente
+# Copiar el resto del código de la aplicación
 COPY . .
 
-# (Opcional) Si usas TypeScript, React, Vue o NestJS, descompila este comando:
-# RUN npm run build
+# Carpeta donde se guardan las imágenes subidas.
+# En Coolify, monta un volumen persistente en esta ruta para que las
+# imágenes no se pierdan al re-desplegar el contenedor.
+RUN mkdir -p /app/uploads
 
-# --- ETAPA 2: Producción ---
-FROM node:20-alpine AS runner
+# Puerto en el que escucha la app (coincide con PORT / valor por defecto 4000)
+EXPOSE 4000
 
-WORKDIR /app
-
-# Configura el entorno a producción
-ENV NODE_ENV=production
-
-# Copia solo los archivos de dependencias necesarias
-COPY package*.json ./
-
-# Instala únicamente dependencias de producción para minimizar tamaño
-RUN npm ci --only=production && npm cache clean --force
-
-# Copia el código fuente (o la carpeta dist/build si compilaste)
-COPY --from=builder /app .
-
-# Expón el puerto donde corre tu aplicación (cambia el 3000 si usas otro)
-EXPOSE 1212
-
-# Usuario no raíz por seguridad
+# Usuario sin privilegios (más seguro que correr como root)
+RUN chown -R node:node /app
 USER node
 
-# Comando para arrancar la aplicación
-CMD ["node", "index.js"]
+ENV NODE_ENV=production
+ENV PORT=4000
+
+CMD ["node", "server.js"]
